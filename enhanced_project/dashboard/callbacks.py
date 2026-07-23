@@ -1,9 +1,16 @@
 """
 Dash callback functions.
 
+This module handles interactions between dashboard components,
+including table filtering, chart updates, and map updates.
+
+Enhancements completed:
+- Replaced repeated filtering logic with a reusable query builder.
+- Improved separation between dashboard behavior and query definitions.
+
 Future enhancements:
-- Improve query and filtering algorithms.
 - Improve database integration and CRUD functionality.
+- Add additional validation and error handling for user inputs.
 """
 
 import pandas as pd
@@ -15,48 +22,37 @@ from dash import html
 from dash.dependencies import Input, Output
 
 from dashboard.database import load_animals
-from dashboard.queries import (
-    WATER_QUERY,
-    MOUNTAIN_QUERY,
-    DISASTER_QUERY
-)
+from dashboard.queries import build_query
 
 
 def register_callbacks(app):
 
     @app.callback(
-        Output('datatable-id', 'data'),
-        Output('datatable-id', 'selected_rows'),
-        Input('filter-type', 'value')
+    Output("datatable-id", "data"),
+    Output("datatable-id", "selected_rows"),
+    Input("filter-type", "value")
     )
     def update_dashboard(filter_type):
         """
-        Filter DataTable based on rescue type selection.
+        Update the dashboard table based on the selected rescue type.
 
-        FIXME (Milestone 4):
-        Replace placeholder database loading with secure MongoDB queries.
+        Uses the query builder from queries.py to dynamically generate
+        MongoDB queries instead of relying on repeated conditional logic.
         """
 
-        if filter_type == 'WATER':
-            query = WATER_QUERY
-
-        elif filter_type == 'MOUNTAIN':
-            query = MOUNTAIN_QUERY
-
-        elif filter_type == 'DISASTER':
-            query = DISASTER_QUERY
-
-        else:
-            query = {}
+        query = build_query(filter_type)
 
         # FIXME (Milestone 4):
-        # Replace with MongoDB read operation
-        df = load_animals()
+        # Replace temporary database retrieval with improved database
+        # connection handling and enhanced CRUD functionality.
 
-        if df.empty:
-            return [], []
+        dff = pd.DataFrame.from_records(db.read(query))
 
-        return df.to_dict('records'), [0]
+        # Remove MongoDB ObjectID field if present
+        dff.drop(columns=["_id"], inplace=True, errors="ignore")
+
+        # Reset table selection after filtering
+        return dff.to_dict("records"), [0]
 
 
     @app.callback(
@@ -71,22 +67,20 @@ def register_callbacks(app):
         if viewData is None:
             return []
 
+        # Convert dashboard records into a pandas DataFrame for processing.
         dff = pd.DataFrame.from_dict(viewData)
 
         if dff.empty or 'breed' not in dff.columns:
             return []
 
+        # Count occurrences of each breed.
         breed_counts = dff['breed'].value_counts()
 
         # Group smaller categories into Other
         if len(breed_counts) > 13:
-
             top13 = breed_counts.nlargest(13)
-
             other_count = breed_counts.iloc[13:].sum()
-
             top13["Other"] = other_count
-
             final_counts = top13
 
         else:
